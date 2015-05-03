@@ -1,19 +1,16 @@
 #include <iostream>
-#include <string>
 #include <fstream>
 #include <windows.h>
-#include <Mmsystem.h>
 #include <opencv2/opencv.hpp>
-#include "fastMath.h"
 #include "DSIFT_CUDA.cuh"
-#include "convGPU.h"
+
 using namespace std;
 using namespace cv;
 
 int main(int argc, char** argv)
 {
 	IplImage *srcImage = 0;
-	char *srcPictureName = "data/untitled.jpg";
+	char *srcPictureName = "data/2.jpg";
 	int imageWidth = 0, imageHeight = 0;
 
 	/* parameter of descripter */
@@ -30,6 +27,7 @@ int main(int argc, char** argv)
 		cout << "Image not found" << endl;
 		exit(1);
 	}
+
 	/*initialize Dsift Filter*/
 	LARGE_INTEGER t1, t2, tc;
 	QueryPerformanceFrequency(&tc);
@@ -43,7 +41,6 @@ int main(int argc, char** argv)
 	compute_grad(self, grayImage);
 	
 	dsift_with_gaussian_window(self);
-	
 	DsiftKeypoint* frameIter = self->frames;
 	float * descrIter = self->descrs;
 	int framex, framey, bint;
@@ -91,25 +88,30 @@ int main(int argc, char** argv)
 			descrIter += descrSize;
 		} /* for framex */
 	} /* for framey */
+
 	QueryPerformanceCounter(&t2);
 	printf("Use Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
+
+	/*write result to file*/
 	ofstream out("output.txt");
-	DsiftKeypoint const *frames = self->frames;
 	ofstream outFrames("Frames.txt");
-	float * outDescrIter = self->descrs;
+	DsiftKeypoint const *frames = self->frames;
 	for (int i = 0; i < self->numFrames; i++)
 	{
 		outFrames << frames[i].y << "\t" << frames[i].x << "\t";
 		outFrames << endl;
-		float *tmpDescr = self->descrs + descrSize * i;
-		for (int j = 0; j < descrSize; ++j) {
-			unsigned char res = (unsigned char)(512.0F * tmpDescr[j] < 255.0F ? (512.0F * tmpDescr[j]) : 255.0F);
+
+		float *tmpDescr = self->descrs + i;
+		for (int j = 0; j < descrSize; ++j) 
+		{
+			unsigned char res = (unsigned char)(512.0F * (*(tmpDescr + j * self->numFrames)) < 255.0F ? (512.0F * (*(tmpDescr + j * self->numFrames))) : 255.0F);
 			out << (unsigned int)res << "\t";
 		}
 		out << endl;
 	}
 	out.close();
 	outFrames.close();
+
 	cvNamedWindow("srcImage", 0);
 	cvShowImage("srcImage", srcImage);
 	cvWaitKey(0);

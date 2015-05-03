@@ -8,11 +8,14 @@
 #define MAX(x,y) (((x)>(y))?(x):(y))
 #define EPSILON_F 1.19209290E-07F
 
+#include <iostream>
+#include <windows.h>
 #include <fstream>
 #include <cuda_runtime.h>
-#include <C:\ProgramData\NVIDIA Corporation\CUDA Samples\v6.5\common\inc\helper_functions.h>
+#include "C:\ProgramData\NVIDIA Corporation\CUDA Samples\v6.5\common\inc\helper_functions.h"
 #include "C:\ProgramData\NVIDIA Corporation\CUDA Samples\v6.5\common\inc\helper_cuda.h"
 #include "convGPU.h"
+#include "fastMath.h"
 
 using namespace std;
 /* Dense SIFT keypoint */
@@ -319,7 +322,7 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 
 	int Wx = self->geom.binSizeX - 1;
 	int Wy = self->geom.binSizeY - 1;
-
+	int loop = 0;
 	for (biny = 0; biny < self->geom.numBinY; ++biny) {
 
 		yker = dsift_new_kernel(self->geom.binSizeY,
@@ -336,6 +339,7 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 
 			for (bint = 0; bint < self->geom.numBinT; ++bint) {
 
+
 				float *d_Input, *d_Buffer, *d_Output, *xkerGPU, *ykerGPU;
 
 				checkCudaErrors(cudaMalloc(&d_Input, self->imWidth * self->imHeight * sizeof(float)));
@@ -347,6 +351,7 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 				checkCudaErrors(cudaMemcpy(d_Input, self->grads[bint], self->imWidth * self->imHeight * sizeof(float), cudaMemcpyHostToDevice));
 				checkCudaErrors(cudaMemcpy(xkerGPU, xker, (2 * self->geom.binSizeX - 1) * sizeof(float), cudaMemcpyHostToDevice));
 				checkCudaErrors(cudaMemcpy(ykerGPU, yker, (2 * self->geom.binSizeY - 1) * sizeof(float), cudaMemcpyHostToDevice));
+
 
 				convolutionRowsGPU(
 					d_Buffer,
@@ -363,36 +368,46 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 					self->imWidth,
 					self->imHeight
 					);
-				checkCudaErrors(cudaMemcpy(self->convTmp2, d_Output, self->imWidth * self->imHeight * sizeof(float), cudaMemcpyDeviceToHost));
 
-				{
-					float *dst = self->descrs
-						+ bint
-						+ binx * self->geom.numBinT
-						+ biny * (self->geom.numBinX * self->geom.numBinT);
+				int frameSizeX = self->geom.binSizeX * (self->geom.numBinX - 1) + 1;
+				int frameSizeY = self->geom.binSizeY * (self->geom.numBinY - 1) + 1;
+				int descrSize = dsift_get_descriptor_size(self);
+				float * resDescr;
+				checkCudaErrors(cudaMalloc(&resDescr, (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2) * sizeof(float)));
+				getDescr( resDescr, 
+					d_Output, 
+					self->boundMaxY - frameSizeY + 2, 
+					self->boundMaxX - frameSizeX + 2,
+					binx * self->geom.binSizeX,
+					biny * self->geom.binSizeY,
+					self->imWidth);
 
-					float *src = self->convTmp2;
+				float *dst = self->descrs + (bint + binx * self->geom.numBinT + biny * (self->geom.numBinX * self->geom.numBinT)) * (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2);
 
-					int frameSizeX = self->geom.binSizeX * (self->geom.numBinX - 1) + 1;
-					int frameSizeY = self->geom.binSizeY * (self->geom.numBinY - 1) + 1;
-					int descrSize = dsift_get_descriptor_size(self);
-					for (framey = self->boundMinY;
-						framey <= self->boundMaxY - frameSizeY + 1;
-						framey += self->stepY) {
+				checkCudaErrors(cudaMemcpy(dst, resDescr, (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2) * sizeof(float), cudaMemcpyDeviceToHost));
+				
 
-						for (framex = self->boundMinX;
-							framex <= self->boundMaxX - frameSizeX + 1;
-							framex += self->stepX) {
-							*dst = src[(framex + binx * self->geom.binSizeX) * 1 +
-								(framey + biny * self->geom.binSizeY) * self->imWidth];
-							dst += descrSize;
-						} /* framex */
 
-					} /* framey */
-				}
+				//float *src = self->convTmp2;
+
+
+				//
+				//for (framey = self->boundMinY; framey <= self->boundMaxY - frameSizeY + 1;framey += self->stepY) 
+				//{
+				//	for (framex = self->boundMinX; framex <= self->boundMaxX - frameSizeX + 1; framex += self->stepX) 
+				//	{
+				//		*dst = src[(framex + binx * self->geom.binSizeX) * 1 +
+				//			(framey + biny * self->geom.binSizeY) * self->imWidth];
+				//		dst += descrSize;
+				//	} /* framex */
+
+				//} /* framey */
 				cudaFree(d_Input);
 				cudaFree(d_Buffer);
 				cudaFree(d_Output);
+				cudaFree(resDescr);
+				cudaFree(xkerGPU);
+				cudaFree(ykerGPU);
 			} /* for bint */
 			delete[]xker;
 		} /* for binx */
