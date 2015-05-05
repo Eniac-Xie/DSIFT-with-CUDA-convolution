@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <assert.h>
+#include <windows.h>
 #include <iostream>
 #include "device_launch_parameters.h"
 #include "device_functions.h"
@@ -208,15 +209,17 @@ void convolutionColumnsGPU(
 
 __global__ void getDescrKernel(float *resDescr, float *d_Output, int baseX, int baseY, int imWidth)
 {
-	*(resDescr + threadIdx.y + blockIdx.y * 32 + (threadIdx.x + blockIdx.x * 32) * imWidth) = d_Output[(threadIdx.y + blockIdx.y * 32 + baseX) * 1 +
-		(threadIdx.x + blockIdx.x * 32 + baseY) * imWidth];
+	*(resDescr + threadIdx.x + blockIdx.x * 32 + (threadIdx.y + blockIdx.y * 32) * imWidth) = d_Output[(threadIdx.x + blockIdx.x * 32 + baseX) * 1 +
+		(threadIdx.y + blockIdx.y * 32 + baseY) * imWidth];
 }
 
 void getDescr(float *resDescr, float *d_Output, int outHeight, int outWidth, int baseX, int baseY, int imWidth)
 {
-	dim3 blocks(outHeight / 32, outWidth / 32);
+
+	dim3 blocks(outWidth / 32, outHeight / 32);
 	dim3 threads(32, 32);
 	getDescrKernel << <blocks, threads >> >(resDescr, d_Output, baseX, baseY, imWidth);
 	getLastCudaError("convolutionRowsKernel() execution failed\n");
+	
 }
 

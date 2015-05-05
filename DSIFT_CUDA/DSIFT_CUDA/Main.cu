@@ -22,25 +22,28 @@ int main(int argc, char** argv)
 	srcImage = cvLoadImage(srcPictureName, 1);
 	imageWidth = srcImage->width;
 	imageHeight = srcImage->height;
+
 	if (srcImage == NULL)
 	{
 		cout << "Image not found" << endl;
 		exit(1);
 	}
+	IplImage * grayImage = cvCreateImage(cvSize(srcImage->width, srcImage->height), srcImage->depth, 1);
+	cvCvtColor(srcImage, grayImage, CV_BGR2GRAY);
 
 	/*initialize Dsift Filter*/
-	LARGE_INTEGER t1, t2, tc;
+
+	LARGE_INTEGER t1, t2, t3, tc;
 	QueryPerformanceFrequency(&tc);
 	QueryPerformanceCounter(&t1);
 
 	DsiftDescriptorGeometry* geom = init_dsift_geom(numBinX, numBinY, numBinT, binSizeX, binSizeY);
 	DsiftFilter* self = init_dsift_filter(imageWidth, imageHeight, geom, step);
 	dsift_alloc_buffers(self);
-	IplImage * grayImage = cvCreateImage(cvSize(srcImage->width, srcImage->height), srcImage->depth, 1);
-	cvCvtColor(srcImage, grayImage, CV_BGR2GRAY);
 	compute_grad(self, grayImage);
 	
 	dsift_with_gaussian_window(self);
+
 	DsiftKeypoint* frameIter = self->frames;
 	float * descrIter = self->descrs;
 	int framex, framey, bint;
@@ -54,13 +57,19 @@ int main(int argc, char** argv)
 
 	float normConstant = frameSizeX * frameSizeY;
 
+
+	//QueryPerformanceCounter(&t2);
+	//printf("******************GPU Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
+
 	for (framey = self->boundMinY;
 		framey <= self->boundMaxY - frameSizeY + 1;
-		framey += self->stepY) {
+		framey += self->stepY) 
+	{
 
 		for (framex = self->boundMinX;
 			framex <= self->boundMaxX - frameSizeX + 1;
-			framex += self->stepX) {
+			framex += self->stepX) 
+		{
 
 			frameIter->x = framex + deltaCenterX;
 			frameIter->y = framey + deltaCenterY;
@@ -89,9 +98,9 @@ int main(int argc, char** argv)
 		} /* for framex */
 	} /* for framey */
 
-	QueryPerformanceCounter(&t2);
-	printf("Use Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
 
+	QueryPerformanceCounter(&t3);
+	printf("*****************use Time:%f\n", (t3.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
 	/*write result to file*/
 	ofstream out("output.txt");
 	ofstream outFrames("Frames.txt");
