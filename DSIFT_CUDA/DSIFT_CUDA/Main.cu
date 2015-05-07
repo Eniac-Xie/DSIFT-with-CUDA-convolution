@@ -2,11 +2,21 @@
 #include <fstream>
 #include <windows.h>
 #include <opencv2/opencv.hpp>
+#include <cuda.h> 
+#include <cuda_runtime.h>
+#include "device_launch_parameters.h"
+#include "device_functions.h"
 #include "DSIFT_CUDA.cuh"
 
 using namespace std;
 using namespace cv;
 
+__global__ void reverse(float *src, float *dest, int width, int height)
+{
+	int x = blockIdx.z * 16384 + blockIdx.y * 256 + blockIdx.x * 4 + threadIdx.y;
+	int y = threadIdx.x;
+	*(dest + x * height + y) = *(src + y * width + x);
+}
 int main(int argc, char** argv)
 {
 	IplImage *srcImage = 0;
@@ -43,11 +53,25 @@ int main(int argc, char** argv)
 	compute_grad(self, grayImage);
 	
 	dsift_with_gaussian_window(self);
+	QueryPerformanceCounter(&t2);
+	printf("******************GPU Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
 
 	DsiftKeypoint* frameIter = self->frames;
-	float * descrIter = self->descrs;
-	int framex, framey, bint;
+	float *srcGPU, *destGPU;
+	checkCudaErrors(cudaMalloc(&srcGPU, sizeof(float)* self->numFrames * self->descrSize));
+	checkCudaErrors(cudaMemcpy(srcGPU, self->descrs, sizeof(float)* self->numFrames * self->descrSize, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMalloc(&destGPU, sizeof(float)* self->numFrames * self->descrSize));
 
+	dim3 threads(128, 4);
+	dim3 blocks(64, 64, self->numFrames / 16384);
+	reverse << <blocks, threads >> >(srcGPU, destGPU, self->numFrames, self->descrSize);
+	checkCudaErrors(cudaMemcpy(self->descrs, destGPU, sizeof(float)* self->numFrames * self->descrSize, cudaMemcpyDeviceToHost));
+
+	QueryPerformanceCounter(&t3);
+	printf("Use Time:%f\n", (t3.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
+
+	int framex, framey, bint;
+	float * descrIter = self->descrs;
 	int frameSizeX = self->geom.binSizeX * (self->geom.numBinX - 1) + 1;
 	int frameSizeY = self->geom.binSizeY * (self->geom.numBinY - 1) + 1;
 	int descrSize = dsift_get_descriptor_size(self);
@@ -57,19 +81,13 @@ int main(int argc, char** argv)
 
 	float normConstant = frameSizeX * frameSizeY;
 
-
-	//QueryPerformanceCounter(&t2);
-	//printf("******************GPU Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
-
 	for (framey = self->boundMinY;
 		framey <= self->boundMaxY - frameSizeY + 1;
-		framey += self->stepY) 
-	{
+		framey += self->stepY) {
 
 		for (framex = self->boundMinX;
 			framex <= self->boundMaxX - frameSizeX + 1;
-			framex += self->stepX) 
-		{
+			framex += self->stepX) {
 
 			frameIter->x = framex + deltaCenterX;
 			frameIter->y = framey + deltaCenterY;
@@ -99,28 +117,23 @@ int main(int argc, char** argv)
 	} /* for framey */
 
 
-	QueryPerformanceCounter(&t3);
-	printf("*****************use Time:%f\n", (t3.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
-	/*write result to file*/
 	ofstream out("output.txt");
-	ofstream outFrames("Frames.txt");
 	DsiftKeypoint const *frames = self->frames;
+	ofstream outFrames("Frames.txt");
+	float * outDescrIter = self->descrs;
 	for (int i = 0; i < self->numFrames; i++)
 	{
 		outFrames << frames[i].y << "\t" << frames[i].x << "\t";
 		outFrames << endl;
-
-		float *tmpDescr = self->descrs + i;
-		for (int j = 0; j < descrSize; ++j) 
-		{
-			unsigned char res = (unsigned char)(512.0F * (*(tmpDescr + j * self->numFrames)) < 255.0F ? (512.0F * (*(tmpDescr + j * self->numFrames))) : 255.0F);
+		float *tmpDescr = self->descrs + descrSize * i;
+		for (int j = 0; j < descrSize; ++j) {
+			unsigned char res = (unsigned char)(512.0F * tmpDescr[j] < 255.0F ? (512.0F * tmpDescr[j]) : 255.0F);
 			out << (unsigned int)res << "\t";
 		}
 		out << endl;
 	}
 	out.close();
 	outFrames.close();
-
 	cvNamedWindow("srcImage", 0);
 	cvShowImage("srcImage", srcImage);
 	cvWaitKey(0);

@@ -318,14 +318,29 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 {
 	int binx, biny, bint;
 	int framex, framey;
-	float *xker, *yker;
+	float *yker;
 
 	int Wx = self->geom.binSizeX - 1;
 	int Wy = self->geom.binSizeY - 1;
 	int loop = 0;
 
-	float *d_Input, *d_Buffer, *d_Output, *xkerGPU, *ykerGPU;
-	checkCudaErrors(cudaMalloc(&d_Input, self->imWidth * self->imHeight * sizeof(float)));
+	float *d_Buffer, *d_Output, *xkerGPU, *ykerGPU;
+	float **d_Input, **xker;
+	d_Input = new float *[self->geom.numBinT];
+	xker = new float*[self->geom.numBinX];
+	for (bint = 0; bint < self->geom.numBinT; bint++)
+	{
+		checkCudaErrors(cudaMalloc(&d_Input[bint], self->imWidth * self->imHeight * sizeof(float)));
+		checkCudaErrors(cudaMemcpy(d_Input[bint], self->grads[bint], self->imWidth * self->imHeight * sizeof(float), cudaMemcpyHostToDevice));
+	}
+	for (binx = 0; binx < self->geom.numBinX; ++binx)
+	{
+		xker[binx] = dsift_new_kernel(self->geom.binSizeX,
+			self->geom.numBinX,
+			binx,
+			self->windowSize);
+	}
+
 	checkCudaErrors(cudaMalloc(&d_Output, self->imWidth * self->imHeight * sizeof(float)));
 	checkCudaErrors(cudaMalloc(&d_Buffer, self->imWidth * self->imHeight * sizeof(float)));
 	checkCudaErrors(cudaMalloc(&xkerGPU, (2 * self->geom.binSizeX - 1) * sizeof(float)));
@@ -346,26 +361,19 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 			self->windowSize);
 		checkCudaErrors(cudaMemcpy(ykerGPU, yker, (2 * self->geom.binSizeY - 1) * sizeof(float), cudaMemcpyHostToDevice));
 		for (binx = 0; binx < self->geom.numBinX; ++binx) {
-
-			xker = dsift_new_kernel(self->geom.binSizeX,
-				self->geom.numBinX,
-				binx,
-				self->windowSize);
-			checkCudaErrors(cudaMemcpy(xkerGPU, xker, (2 * self->geom.binSizeX - 1) * sizeof(float), cudaMemcpyHostToDevice));
+			checkCudaErrors(cudaMemcpy(xkerGPU, xker[binx], (2 * self->geom.binSizeX - 1) * sizeof(float), cudaMemcpyHostToDevice));
 			for (bint = 0; bint < self->geom.numBinT; ++bint) {
 
 				//LARGE_INTEGER t1, t2, t3, tc;
 				//QueryPerformanceFrequency(&tc);
 				//QueryPerformanceCounter(&t1);
-				checkCudaErrors(cudaMemcpy(d_Input, self->grads[bint], self->imWidth * self->imHeight * sizeof(float), cudaMemcpyHostToDevice));
 				convolutionRowsGPU(
 					d_Buffer,
-					d_Input,
+					d_Input[bint],
 					xkerGPU,
 					self->imWidth,
 					self->imHeight
 					);
-
 				convolutionColumnsGPU(
 					d_Output,
 					d_Buffer,
@@ -378,7 +386,6 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 				//QueryPerformanceCounter(&t2);
 				//printf("convolution Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
 
-
 				getDescr( resDescr, 
 					d_Output, 
 					self->boundMaxY - frameSizeY + 2, 
@@ -386,20 +393,20 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 					binx * self->geom.binSizeX,
 					biny * self->geom.binSizeY,
 					self->imWidth);
-
-
 				float *dst = self->descrs + (bint + binx * self->geom.numBinT + biny * (self->geom.numBinX * self->geom.numBinT)) * (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2);
-
 				checkCudaErrors(cudaMemcpy(dst, resDescr, (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2) * sizeof(float), cudaMemcpyDeviceToHost));
-				
 				//QueryPerformanceCounter(&t3);
 				//printf("Copy Time:%f\n", (t3.QuadPart - t2.QuadPart)*1.0 / tc.QuadPart);
 			} /* for bint */
-			delete[]xker;
+			
 		} /* for binx */
 		delete[]yker;
 	} /* for biny */
-	cudaFree(d_Input);
+	delete[]xker;
+	for (bint = 0; bint < self->geom.numBinT; bint++)
+	{
+		cudaFree(d_Input[bint]);
+	}
 	cudaFree(d_Buffer);
 	cudaFree(d_Output);
 	cudaFree(xkerGPU);
