@@ -11,12 +11,7 @@
 using namespace std;
 using namespace cv;
 
-__global__ void reverse(float *src, float *dest, int width, int height)
-{
-	int x = blockIdx.z * 16384 + blockIdx.y * 256 + blockIdx.x * 4 + threadIdx.y;
-	int y = threadIdx.x;
-	*(dest + x * height + y) = *(src + y * width + x);
-}
+
 int main(int argc, char** argv)
 {
 	IplImage *srcImage = 0;
@@ -50,25 +45,23 @@ int main(int argc, char** argv)
 	DsiftDescriptorGeometry* geom = init_dsift_geom(numBinX, numBinY, numBinT, binSizeX, binSizeY);
 	DsiftFilter* self = init_dsift_filter(imageWidth, imageHeight, geom, step);
 	dsift_alloc_buffers(self);
-	compute_grad(self, grayImage);
-	
-	dsift_with_gaussian_window(self);
-	QueryPerformanceCounter(&t2);
-	printf("******************GPU Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
-
-	DsiftKeypoint* frameIter = self->frames;
 	float *srcGPU, *destGPU;
 	checkCudaErrors(cudaMalloc(&srcGPU, sizeof(float)* self->numFrames * self->descrSize));
-	checkCudaErrors(cudaMemcpy(srcGPU, self->descrs, sizeof(float)* self->numFrames * self->descrSize, cudaMemcpyHostToDevice));
 	checkCudaErrors(cudaMalloc(&destGPU, sizeof(float)* self->numFrames * self->descrSize));
+	compute_grad(self, grayImage);
+	
+	dsift_with_gaussian_window(self, srcGPU);
+
+
+	DsiftKeypoint* frameIter = self->frames;
 
 	dim3 threads(128, 4);
 	dim3 blocks(64, 64, self->numFrames / 16384);
 	reverse << <blocks, threads >> >(srcGPU, destGPU, self->numFrames, self->descrSize);
 	checkCudaErrors(cudaMemcpy(self->descrs, destGPU, sizeof(float)* self->numFrames * self->descrSize, cudaMemcpyDeviceToHost));
 
-	QueryPerformanceCounter(&t3);
-	printf("Use Time:%f\n", (t3.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
+	//QueryPerformanceCounter(&t2);
+	//printf("******************GPU Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
 
 	int framex, framey, bint;
 	float * descrIter = self->descrs;
@@ -84,39 +77,33 @@ int main(int argc, char** argv)
 	for (framey = self->boundMinY;
 		framey <= self->boundMaxY - frameSizeY + 1;
 		framey += self->stepY) {
-
 		for (framex = self->boundMinX;
 			framex <= self->boundMaxX - frameSizeX + 1;
 			framex += self->stepX) {
 
 			frameIter->x = framex + deltaCenterX;
 			frameIter->y = framey + deltaCenterY;
-
-			/* mass */
-			{
-				float mass = 0;
-				for (bint = 0; bint < descrSize; ++bint)
-					mass += descrIter[bint];
-				mass /= normConstant;
-				frameIter->norm = mass;
-			}
-
-			/* L2 normalize */
-			dsift_normalize_histogram(descrIter, descrIter + descrSize);
-
-			/* clamp */
-			for (bint = 0; bint < descrSize; ++bint)
-			if (descrIter[bint] > 0.2F) descrIter[bint] = 0.2F;
-
-			/* L2 normalize */
-			dsift_normalize_histogram(descrIter, descrIter + descrSize);
-
 			frameIter++;
-			descrIter += descrSize;
 		} /* for framex */
 	} /* for framey */
 
+#pragma omp parallel for
+	for (int i = 0; i < self->numFrames; i++)
+	{
+		/* L2 normalize */
+		dsift_normalize_histogram(descrIter, descrIter + descrSize);
 
+		/* clamp */
+		for (bint = 0; bint < descrSize; ++bint)
+		if (descrIter[bint] > 0.2F) descrIter[bint] = 0.2F;
+
+		/* L2 normalize */
+		dsift_normalize_histogram(descrIter, descrIter + descrSize);
+
+		descrIter += descrSize;
+	}
+	QueryPerformanceCounter(&t3);
+	printf("Use Time:%f\n", (t3.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
 	ofstream out("output.txt");
 	DsiftKeypoint const *frames = self->frames;
 	ofstream outFrames("Frames.txt");

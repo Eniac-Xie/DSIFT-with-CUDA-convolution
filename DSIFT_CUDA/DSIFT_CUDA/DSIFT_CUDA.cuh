@@ -314,7 +314,7 @@ void imconvcol_vf(float* dst, int dst_stride,
 	} /* next x */
 };
 
-void dsift_with_gaussian_window(DsiftFilter * self)
+void dsift_with_gaussian_window(DsiftFilter * self, float *srcGPU)
 {
 	int binx, biny, bint;
 	int framex, framey;
@@ -393,8 +393,8 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 					binx * self->geom.binSizeX,
 					biny * self->geom.binSizeY,
 					self->imWidth);
-				float *dst = self->descrs + (bint + binx * self->geom.numBinT + biny * (self->geom.numBinX * self->geom.numBinT)) * (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2);
-				checkCudaErrors(cudaMemcpy(dst, resDescr, (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2) * sizeof(float), cudaMemcpyDeviceToHost));
+				float *dst = srcGPU + (bint + binx * self->geom.numBinT + biny * (self->geom.numBinX * self->geom.numBinT)) * (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2);
+				checkCudaErrors(cudaMemcpy(dst, resDescr, (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2) * sizeof(float), cudaMemcpyDeviceToDevice));
 				//QueryPerformanceCounter(&t3);
 				//printf("Copy Time:%f\n", (t3.QuadPart - t2.QuadPart)*1.0 / tc.QuadPart);
 			} /* for bint */
@@ -413,6 +413,20 @@ void dsift_with_gaussian_window(DsiftFilter * self)
 	cudaFree(ykerGPU);
 	cudaFree(resDescr);
 };
+inline float Q_rsqrt(float number)
+{
+	long i;
+	float x2, y;
+	const float threehalfs = 1.5F;
+
+	x2 = number * 0.5F;
+	y = number;
+	i = *(long *)&y;           
+	i = 0x5f3759df - (i >> 1); 
+	y = *(float *)&i;
+	y = y * (threehalfs - (x2 * y * y));   // 1st iteration
+	return y;
+}
 
 inline float dsift_normalize_histogram(float * begin, float * end)
 {
@@ -422,10 +436,10 @@ inline float dsift_normalize_histogram(float * begin, float * end)
 	for (iter = begin; iter < end; ++iter) {
 		norm += (*iter) * (*iter);
 	}
-	norm = fast_sqrt_f(norm) + EPSILON_F;
+	norm = Q_rsqrt(norm);
 
 	for (iter = begin; iter < end; ++iter) {
-		*iter /= norm;
+		*iter *= norm;
 	}
 	return norm;
 };
@@ -452,4 +466,10 @@ int numBinY)
 	}
 };
 
+__global__ void reverse(float *src, float *dest, int width, int height)
+{
+	int x = blockIdx.z * 16384 + blockIdx.y * 256 + blockIdx.x * 4 + threadIdx.y;
+	int y = threadIdx.x;
+	*(dest + x * height + y) = *(src + y * width + x);
+}
 #endif
