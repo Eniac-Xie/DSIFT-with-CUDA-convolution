@@ -38,7 +38,7 @@ int main(int argc, char** argv)
 
 	/*initialize Dsift Filter*/
 
-	LARGE_INTEGER t1, t2, t3, tc;
+	LARGE_INTEGER t1, t3, tc;
 	QueryPerformanceFrequency(&tc);
 	QueryPerformanceCounter(&t1);
 
@@ -52,7 +52,6 @@ int main(int argc, char** argv)
 	
 	dsift_with_gaussian_window(self, srcGPU);
 
-
 	DsiftKeypoint* frameIter = self->frames;
 
 	dim3 threads(128, 4);
@@ -60,27 +59,22 @@ int main(int argc, char** argv)
 	reverse << <blocks, threads >> >(srcGPU, destGPU, self->numFrames, self->descrSize);
 	checkCudaErrors(cudaMemcpy(self->descrs, destGPU, sizeof(float)* self->numFrames * self->descrSize, cudaMemcpyDeviceToHost));
 
-	//QueryPerformanceCounter(&t2);
-	//printf("******************GPU Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
-
 	int framex, framey, bint;
-	float * descrIter = self->descrs;
 	int frameSizeX = self->geom.binSizeX * (self->geom.numBinX - 1) + 1;
 	int frameSizeY = self->geom.binSizeY * (self->geom.numBinY - 1) + 1;
 	int descrSize = dsift_get_descriptor_size(self);
-
+	float * descrIter = self->descrs;
 	float deltaCenterX = 0.5F * self->geom.binSizeX * (self->geom.numBinX - 1);
 	float deltaCenterY = 0.5F * self->geom.binSizeY * (self->geom.numBinY - 1);
 
-	float normConstant = frameSizeX * frameSizeY;
-
 	for (framey = self->boundMinY;
 		framey <= self->boundMaxY - frameSizeY + 1;
-		framey += self->stepY) {
+		framey += self->stepY) 
+	{
 		for (framex = self->boundMinX;
 			framex <= self->boundMaxX - frameSizeX + 1;
-			framex += self->stepX) {
-
+			framex += self->stepX) 
+		{
 			frameIter->x = framex + deltaCenterX;
 			frameIter->y = framey + deltaCenterY;
 			frameIter++;
@@ -102,18 +96,19 @@ int main(int argc, char** argv)
 
 		descrIter += descrSize;
 	}
+
 	QueryPerformanceCounter(&t3);
 	printf("Use Time:%f\n", (t3.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
 	ofstream out("output.txt");
 	DsiftKeypoint const *frames = self->frames;
 	ofstream outFrames("Frames.txt");
-	float * outDescrIter = self->descrs;
 	for (int i = 0; i < self->numFrames; i++)
 	{
 		outFrames << frames[i].y << "\t" << frames[i].x << "\t";
 		outFrames << endl;
 		float *tmpDescr = self->descrs + descrSize * i;
-		for (int j = 0; j < descrSize; ++j) {
+		for (int j = 0; j < descrSize; ++j) 
+		{
 			unsigned char res = (unsigned char)(512.0F * tmpDescr[j] < 255.0F ? (512.0F * tmpDescr[j]) : 255.0F);
 			out << (unsigned int)res << "\t";
 		}

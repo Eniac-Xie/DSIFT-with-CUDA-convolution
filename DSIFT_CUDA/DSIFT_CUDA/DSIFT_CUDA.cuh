@@ -160,24 +160,30 @@ void compute_grad(DsiftFilter * dsift, IplImage *srcImage)
 			int bint;
 
 			/* y derivative */
-			if (y == 0) {
+			if (y == 0) 
+			{
 				gy = at(x, y + 1, srcImage) - at(x, y, srcImage);
 			}
-			else if (y == imageHeight - 1) {
+			else if (y == imageHeight - 1) 
+			{
 				gy = at(x, y, srcImage) - at(x, y - 1, srcImage);
 			}
-			else {
+			else 
+			{
 				gy = 0.5F * (at(x, y + 1, srcImage) - at(x, y - 1, srcImage));
 			}
 
 			/* x derivative */
-			if (x == 0) {
+			if (x == 0) 
+			{
 				gx = at(x + 1, y, srcImage) - at(x, y, srcImage);
 			}
-			else if (x == imageWidth - 1) {
+			else if (x == imageWidth - 1) 
+			{
 				gx = at(x, y, srcImage) - at(x - 1, y, srcImage);
 			}
-			else {
+			else 
+			{
 				gx = 0.5F * (at(x + 1, y, srcImage) - at(x - 1, y, srcImage));
 			}
 
@@ -206,7 +212,8 @@ void dsift_alloc_buffers(DsiftFilter* self)
 	self->frames = new DsiftKeypoint[numFrameAlloc];
 	self->descrs = new float[numBinAlloc * numFrameAlloc];
 	self->grads = new float*[numGradAlloc];
-	for (int t = 0; t < numGradAlloc; ++t) {
+	for (int t = 0; t < numGradAlloc; ++t) 
+	{
 		self->grads[t] = new float[self->imWidth * self->imHeight];
 	}
 };
@@ -221,7 +228,8 @@ dsift_new_kernel(int binSize, int numBins, int binIndex, double windowSize)
 	float sigma = (float)binSize * (float)windowSize;
 	int x;
 
-	for (x = -binSize + 1; x <= +binSize - 1; ++x) {
+	for (x = -binSize + 1; x <= +binSize - 1; ++x) 
+	{
 		float z = (x - delta) / sigma;
 		*kerIter++ = (1.0F - fabsf(x) / binSize) *
 			((binIndex >= 0) ? expf(-0.5F * z * z) : 1.0F);
@@ -244,7 +252,8 @@ void imconvcol_vf(float* dst, int dst_stride,
 	/* let filt point to the last sample of the filter */
 	filt += filt_end - filt_begin;
 
-	while (x < (signed)src_width) {
+	while (x < (signed)src_width) 
+	{
 		/* Calculate dest[x,y] = sum_p image[x,p] filt[y - p]
 		* where supp(filt) = [filt_begin, filt_end] = [fb,fe].
 		*
@@ -257,7 +266,8 @@ void imconvcol_vf(float* dst, int dst_stride,
 		float const *filti;
 		int stop;
 
-		for (y = 0; y < (signed)src_height; y += step) {
+		for (y = 0; y < (signed)src_height; y += step) 
+		{
 			float acc = 0;
 			float v = 0, c;
 			float const* srci;
@@ -265,16 +275,19 @@ void imconvcol_vf(float* dst, int dst_stride,
 			filti = filt;
 			stop = filt_end - y;
 			srci = src + x - stop * src_stride;
-			int res = srci - src;
 			/*stop > 0, pick up values outside the image boundary*/
-			if (stop > 0) {
-				if (zeropad) {
+			if (stop > 0) 
+			{
+				if (zeropad) 
+				{
 					v = 0;
 				}
-				else {
+				else 
+				{
 					v = *(src + x);
 				}
-				while (filti > filt - stop) {
+				while (filti > filt - stop) 
+				{
 					c = *filti--;
 					acc += v * c;
 					srci += src_stride;
@@ -282,7 +295,8 @@ void imconvcol_vf(float* dst, int dst_stride,
 			}
 
 			stop = filt_end - MAX(filt_begin, y - (signed)src_height + 1) + 1;
-			while (filti > filt - stop) {
+			while (filti > filt - stop) 
+			{
 				v = *srci;
 				c = *filti--;
 				acc += v * c;
@@ -292,22 +306,27 @@ void imconvcol_vf(float* dst, int dst_stride,
 			if (zeropad) v = 0;
 
 			stop = filt_end - filt_begin + 1;
-			while (filti > filt - stop) {
+			while (filti > filt - stop) 
+			{
 				c = *filti--;
 				acc += v * c;
 			}
 
-			if (transp) {
+			if (transp) 
+			{
 				*dst = acc; dst += 1;
 			}
-			else {
+			else 
+			{
 				*dst = acc; dst += dst_stride;
 			}
 		} /* next y */
-		if (transp) {
+		if (transp) 
+		{
 			dst += 1 * dst_stride - dheight * 1;
 		}
-		else {
+		else 
+		{
 			dst += 1 * 1 - dheight * dst_stride;
 		}
 		x += 1;
@@ -317,13 +336,7 @@ void imconvcol_vf(float* dst, int dst_stride,
 void dsift_with_gaussian_window(DsiftFilter * self, float *srcGPU)
 {
 	int binx, biny, bint;
-	int framex, framey;
 	float *yker;
-
-	int Wx = self->geom.binSizeX - 1;
-	int Wy = self->geom.binSizeY - 1;
-	int loop = 0;
-
 	float *d_Buffer, *d_Output, *xkerGPU, *ykerGPU;
 	float **d_Input, **xker;
 	d_Input = new float *[self->geom.numBinT];
@@ -353,20 +366,18 @@ void dsift_with_gaussian_window(DsiftFilter * self, float *srcGPU)
 	checkCudaErrors(cudaMalloc(&resDescr, (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2) * sizeof(float)));
 
 
-	for (biny = 0; biny < self->geom.numBinY; ++biny) {
-
+	for (biny = 0; biny < self->geom.numBinY; ++biny) 
+	{
 		yker = dsift_new_kernel(self->geom.binSizeY,
 			self->geom.numBinY,
 			biny,
 			self->windowSize);
 		checkCudaErrors(cudaMemcpy(ykerGPU, yker, (2 * self->geom.binSizeY - 1) * sizeof(float), cudaMemcpyHostToDevice));
-		for (binx = 0; binx < self->geom.numBinX; ++binx) {
+		for (binx = 0; binx < self->geom.numBinX; ++binx) 
+		{
 			checkCudaErrors(cudaMemcpy(xkerGPU, xker[binx], (2 * self->geom.binSizeX - 1) * sizeof(float), cudaMemcpyHostToDevice));
-			for (bint = 0; bint < self->geom.numBinT; ++bint) {
-
-				//LARGE_INTEGER t1, t2, t3, tc;
-				//QueryPerformanceFrequency(&tc);
-				//QueryPerformanceCounter(&t1);
+			for (bint = 0; bint < self->geom.numBinT; ++bint) 
+			{
 				convolutionRowsGPU(
 					d_Buffer,
 					d_Input[bint],
@@ -383,9 +394,6 @@ void dsift_with_gaussian_window(DsiftFilter * self, float *srcGPU)
 					);
 				cudaDeviceSynchronize();
 
-				//QueryPerformanceCounter(&t2);
-				//printf("convolution Time:%f\n", (t2.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
-
 				getDescr( resDescr, 
 					d_Output, 
 					self->boundMaxY - frameSizeY + 2, 
@@ -395,10 +403,7 @@ void dsift_with_gaussian_window(DsiftFilter * self, float *srcGPU)
 					self->imWidth);
 				float *dst = srcGPU + (bint + binx * self->geom.numBinT + biny * (self->geom.numBinX * self->geom.numBinT)) * (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2);
 				checkCudaErrors(cudaMemcpy(dst, resDescr, (self->boundMaxY - frameSizeY + 2) * (self->boundMaxX - frameSizeX + 2) * sizeof(float), cudaMemcpyDeviceToDevice));
-				//QueryPerformanceCounter(&t3);
-				//printf("Copy Time:%f\n", (t3.QuadPart - t2.QuadPart)*1.0 / tc.QuadPart);
 			} /* for bint */
-			
 		} /* for binx */
 		delete[]yker;
 	} /* for biny */
@@ -453,12 +458,15 @@ int numBinY)
 {
 	int t, x, y;
 
-	for (y = 0; y < numBinY; ++y) {
-		for (x = 0; x < numBinX; ++x) {
+	for (y = 0; y < numBinY; ++y) 
+	{
+		for (x = 0; x < numBinX; ++x) 
+		{
 			int offset = numBinT * (x + y * numBinX);
 			int offsetT = numBinT * (y + x * numBinY);
 
-			for (t = 0; t < numBinT; ++t) {
+			for (t = 0; t < numBinT; ++t) 
+			{
 				int tT = numBinT / 4 - t;
 				dst[offsetT + (tT + numBinT) % numBinT] = src[offset + t];
 			}

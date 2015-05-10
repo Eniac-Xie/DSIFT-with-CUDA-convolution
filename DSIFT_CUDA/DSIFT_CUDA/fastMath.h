@@ -12,11 +12,13 @@ inline float fast_atan2_f(float y, float x)
 	float const c1 = 0.9675F;
 	float abs_y = fabs(y) + DSIFT_EPSILON_F;
 
-	if (x >= 0) {
+	if (x >= 0) 
+	{
 		r = (x - abs_y) / (x + abs_y);
 		angle = (float)(DSIFT_PI / 4);
 	}
-	else {
+	else 
+	{
 		r = (x + abs_y) / (abs_y - x);
 		angle = (float)(3 * DSIFT_PI / 4);
 	}
@@ -27,7 +29,8 @@ inline float fast_atan2_f(float y, float x)
 inline float fast_resqrt_f(float x)
 {
 	/* 32-bit version */
-	union {
+	union 
+	{
 		float x;
 		int  i;
 	} u;
