@@ -434,13 +434,38 @@ inline float Q_rsqrt(float number)
 	return y;
 };
 
-inline float dsift_normalize_histogram(float * begin, float * end)
+inline float dsift_normalize_histogram1(float * begin, float * end)
 {
 	float * iter;
 	float  norm = 0.0F;
 
-	for (iter = begin; iter < end; ++iter) {
+	for (iter = begin; iter < end; ++iter) 
+	{
 		norm += (*iter) * (*iter);
+	}
+	norm = Q_rsqrt(norm);
+
+	for (iter = begin; iter < end; ++iter) 
+	{
+		*iter *= norm;
+
+	}
+	return norm;
+};
+
+inline float dsift_normalize_histogram2(float * begin, float * end)
+{
+	float * iter;
+	float  norm = 0.0F;
+
+	for (iter = begin; iter < end; ++iter) 
+	{
+		if (*iter > 0.2)
+		{
+			norm += 0.04;
+		}
+		else
+			norm += (*iter) * (*iter);
 	}
 	norm = Q_rsqrt(norm);
 

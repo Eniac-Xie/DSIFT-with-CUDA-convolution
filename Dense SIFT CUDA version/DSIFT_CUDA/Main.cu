@@ -94,14 +94,10 @@ int main(int argc, char** argv)
 	for (int i = 0; i < self->numFrames; i++)
 	{
 		/* L2 normalize */
-		dsift_normalize_histogram(descrIter, descrIter + descrSize);
+		dsift_normalize_histogram1(descrIter, descrIter + descrSize);
 
-		/* clamp */
-		for (bint = 0; bint < descrSize; ++bint)
-		if (descrIter[bint] > 0.2F) descrIter[bint] = 0.2F;
-
-		/* L2 normalize */
-		dsift_normalize_histogram(descrIter, descrIter + descrSize);
+		/* clamp and L2 normalize */
+		dsift_normalize_histogram2(descrIter, descrIter + descrSize);
 
 		descrIter += descrSize;
 	}
