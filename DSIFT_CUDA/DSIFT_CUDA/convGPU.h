@@ -24,5 +24,14 @@ void convolutionColumnsGPU(
 	int imageH
 	);
 
-void getDescr(float *resDescr, float *d_Output, int outHeight, int outWidth, int baseX, int baseY, int imWidth);
+void getDescr(
+	float *resDescr, 
+	float *d_Output, 
+	int outHeight, 
+	int outWidth, 
+	int baseX, 
+	int baseY, 
+	int imWidth
+	);
+
 #endif

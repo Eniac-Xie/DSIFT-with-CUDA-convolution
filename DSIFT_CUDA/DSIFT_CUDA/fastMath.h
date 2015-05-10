@@ -24,7 +24,7 @@ inline float fast_atan2_f(float y, float x)
 	}
 	angle += (c3*r*r - c1) * r;
 	return (y < 0) ? -angle : angle;
-}
+};
 
 inline float fast_resqrt_f(float x)
 {
@@ -48,24 +48,25 @@ inline float fast_resqrt_f(float x)
 	u.x = u.x * ((float) 1.5 - xhalf*u.x*u.x);
 	u.x = u.x * ((float) 1.5 - xhalf*u.x*u.x);
 	return u.x;
-}
+};
 
 inline float fast_sqrt_f(float x)
 {
 	return (x < 1e-8) ? 0 : x * fast_resqrt_f(x);
-}
+};
 
 inline float mod_2pi_f(float x)
 {
 	while (x >(float)(2 * DSIFT_PI)) x -= (float)(2 * DSIFT_PI);
 	while (x < 0.0F) x += (float)(2 * DSIFT_PI);
 	return x;
-}
+};
 
 inline long int floor_f(float x)
 {
 	long int xi = (long int)x;
 	if (x >= 0 || (float)xi == x) return xi;
 	else return xi - 1;
-}
+};
+
 #endif

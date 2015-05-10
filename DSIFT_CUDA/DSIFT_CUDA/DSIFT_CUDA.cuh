@@ -17,7 +17,6 @@
 #include "convGPU.h"
 #include "fastMath.h"
 
-using namespace std;
 /* Dense SIFT keypoint */
 typedef struct DsiftKeypoint_
 {
@@ -140,7 +139,8 @@ float at(int x, int y, IplImage *srcImage)
 {
 	uchar* ptr = (uchar*)(srcImage->imageData + y * srcImage->widthStep);
 	return ptr[x] / 255.f;
-}
+};
+
 void compute_grad(DsiftFilter * dsift, IplImage *srcImage)
 {
 	int imageHeight = dsift->imHeight;
@@ -218,8 +218,7 @@ void dsift_alloc_buffers(DsiftFilter* self)
 	}
 };
 
-float *
-dsift_new_kernel(int binSize, int numBins, int binIndex, double windowSize)
+float * dsift_new_kernel(int binSize, int numBins, int binIndex, double windowSize)
 {
 	int filtLen = 2 * binSize - 1;
 	float * ker = new float[filtLen];
@@ -418,6 +417,8 @@ void dsift_with_gaussian_window(DsiftFilter * self, float *srcGPU)
 	cudaFree(ykerGPU);
 	cudaFree(resDescr);
 };
+
+/*fast sqrt algorithm for float, function return 1/sqrt(number)*/
 inline float Q_rsqrt(float number)
 {
 	long i;
@@ -431,7 +432,7 @@ inline float Q_rsqrt(float number)
 	y = *(float *)&i;
 	y = y * (threehalfs - (x2 * y * y));   // 1st iteration
 	return y;
-}
+};
 
 inline float dsift_normalize_histogram(float * begin, float * end)
 {
@@ -479,5 +480,6 @@ __global__ void reverse(float *src, float *dest, int width, int height)
 	int x = blockIdx.z * 16384 + blockIdx.y * 256 + blockIdx.x * 4 + threadIdx.y;
 	int y = threadIdx.x;
 	*(dest + x * height + y) = *(src + y * width + x);
-}
+};
+
 #endif

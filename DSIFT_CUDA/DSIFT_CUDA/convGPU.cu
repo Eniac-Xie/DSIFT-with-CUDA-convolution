@@ -1,6 +1,5 @@
 #include <cuda.h> 
 #include <cuda_runtime.h>
-#include <stdio.h>
 #include <assert.h>
 #include <windows.h>
 #include <iostream>
@@ -8,6 +7,8 @@
 #include "device_functions.h"
 #include "C:\ProgramData\NVIDIA Corporation\CUDA Samples\v6.5\common\inc\helper_cuda.h"
 #include "convGPU.h"
+
+
 
 using namespace std;
 
@@ -99,8 +100,6 @@ void convolutionRowsGPU(
 
 	dim3 blocks(imageW / (ROWS_RESULT_STEPS * ROWS_BLOCKDIM_X), imageH / ROWS_BLOCKDIM_Y);
 	dim3 threads(ROWS_BLOCKDIM_X, ROWS_BLOCKDIM_Y);
-	//cout << "blocks" << blocks.x << "\t" << blocks.y << "\t" << blocks.z << endl;
-	//cout << threads.x << "\t" << threads.y << "\t" << threads.z << endl;
 	convolutionRowsKernel << <blocks, threads >> >(
 		d_Dst,
 		d_Src,

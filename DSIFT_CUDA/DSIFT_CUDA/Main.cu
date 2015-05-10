@@ -14,34 +14,42 @@ using namespace cv;
 
 int main(int argc, char** argv)
 {
-	IplImage *srcImage = 0;
-	char *srcPictureName = "data/2.jpg";
+	if (argc != 2)
+	{
+		cout << "No image input or too many image input. " << endl;
+		exit(-1);
+	}
+
+	/* parameter of image */
+	IplImage *srcImage = NULL;
+	char *srcPictureName = argv[1];
 	int imageWidth = 0, imageHeight = 0;
 
 	/* parameter of descripter */
 	int numBinX = 4, numBinY = 4, numBinT = 8, binSizeX = 8, binSizeY = 8;
 
-	/* step of X and Y */
+	/* sample step of X and Y */
 	int step[2] = { 1, 1 };
 
 	srcImage = cvLoadImage(srcPictureName, 1);
-	imageWidth = srcImage->width;
-	imageHeight = srcImage->height;
-
 	if (srcImage == NULL)
 	{
 		cout << "Image not found" << endl;
-		exit(1);
+		exit(-2);
 	}
+	imageWidth = srcImage->width;
+	imageHeight = srcImage->height;
+
+	/* program use gray scale image only */
 	IplImage * grayImage = cvCreateImage(cvSize(srcImage->width, srcImage->height), srcImage->depth, 1);
 	cvCvtColor(srcImage, grayImage, CV_BGR2GRAY);
 
-	/*initialize Dsift Filter*/
-
+	
 	LARGE_INTEGER t1, t3, tc;
 	QueryPerformanceFrequency(&tc);
 	QueryPerformanceCounter(&t1);
 
+	/*initialize Dsift Filter*/
 	DsiftDescriptorGeometry* geom = init_dsift_geom(numBinX, numBinY, numBinT, binSizeX, binSizeY);
 	DsiftFilter* self = init_dsift_filter(imageWidth, imageHeight, geom, step);
 	dsift_alloc_buffers(self);
@@ -50,11 +58,10 @@ int main(int argc, char** argv)
 	checkCudaErrors(cudaMalloc(&destGPU, sizeof(float)* self->numFrames * self->descrSize));
 	compute_grad(self, grayImage);
 	
+	/* do dense sift, dsift descripter saved in srcGPU*/
 	dsift_with_gaussian_window(self, srcGPU);
 
-	DsiftKeypoint* frameIter = self->frames;
-
-	dim3 threads(128, 4);
+	dim3 threads(self->descrSize, 4);
 	dim3 blocks(64, 64, self->numFrames / 16384);
 	reverse << <blocks, threads >> >(srcGPU, destGPU, self->numFrames, self->descrSize);
 	checkCudaErrors(cudaMemcpy(self->descrs, destGPU, sizeof(float)* self->numFrames * self->descrSize, cudaMemcpyDeviceToHost));
@@ -67,6 +74,7 @@ int main(int argc, char** argv)
 	float deltaCenterX = 0.5F * self->geom.binSizeX * (self->geom.numBinX - 1);
 	float deltaCenterY = 0.5F * self->geom.binSizeY * (self->geom.numBinY - 1);
 
+	DsiftKeypoint* frameIter = self->frames;
 	for (framey = self->boundMinY;
 		framey <= self->boundMaxY - frameSizeY + 1;
 		framey += self->stepY) 
@@ -81,6 +89,7 @@ int main(int argc, char** argv)
 		} /* for framex */
 	} /* for framey */
 
+	/*use openMP to accelerate normalize*/
 #pragma omp parallel for
 	for (int i = 0; i < self->numFrames; i++)
 	{
@@ -98,10 +107,12 @@ int main(int argc, char** argv)
 	}
 
 	QueryPerformanceCounter(&t3);
-	printf("Use Time:%f\n", (t3.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart);
-	ofstream out("output.txt");
+	cout << "Use Time: " << (t3.QuadPart - t1.QuadPart)*1.0 / tc.QuadPart << endl;
+
+	ofstream out("descriptor.txt");
+	ofstream outFrames("frames.txt");
+
 	DsiftKeypoint const *frames = self->frames;
-	ofstream outFrames("Frames.txt");
 	for (int i = 0; i < self->numFrames; i++)
 	{
 		outFrames << frames[i].y << "\t" << frames[i].x << "\t";
@@ -116,6 +127,7 @@ int main(int argc, char** argv)
 	}
 	out.close();
 	outFrames.close();
+
 	cvNamedWindow("srcImage", 0);
 	cvShowImage("srcImage", srcImage);
 	cvWaitKey(0);
